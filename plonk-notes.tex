@@ -1,0 +1,253 @@
+\documentclass[11pt]{article}
+
+\usepackage{lindenbaum}
+
+\newcommand{\plonk}{$\mathcal{P} \mathfrak{lon} \mathcal{K}$}
+\newcommand{\field}{\mathbb{F}}
+\newcommand{\gen}{\mathbf{g}}
+
+\title{Notes on \plonk{}: Permutations over Lagrange-bases for Oecumenical Noninteractive Arguments of Knowledge}
+\author{Alexander Lindenbaum}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+\paragraph{} These are my notes reading through the celebrated 2019 \plonk{} paper, due to \cite{plonk}. I have written these notes in the order in which I understand the paper, and not the order in which facts are displayed in the paper itself. Keep in mind that these notes are not reviewed by anyone else, and mostly serve as a reference for myself. That being said, any notes or corrections are welcome! Feel free to email me at \href{mailto:lindenbaum.alexander@gmail.com}{lindenbaum.alexander@gmail.com} with suggestions.
+
+\paragraph{} Thank you to Trapdoor-Tech on Medium for providing a secondary reference for reading the \plonk{} paper. You can find the reference \href{https://trapdoortech.medium.com/zkp-plonk-algorithm-introduction-834556a32a}{here}.
+
+\section{plonk Introduction}
+\paragraph{} This is section 1 of \cite{plonk}.
+
+\paragraph{} \plonk{} is a zk-SNARK which, similarly to KZG in \cite{kzg10}, uses a \textit{structured reference string (SRS)}. One downside to using an SRS is that the SRS must be constructed in a trusted setup, away from any provers. Otherwise, the construction could leak information that an adversarial prover could use to convince verifiers of false statements. The main contribution of \plonk{} is a zk-SNARK protocol with a "universal and updatable" SRS. This means that the same SRS can be used for statements about all circuits of a bounded size, and any party can update the SRS in such a manner that the soundness of only one party from all updaters is required for soundness.
+
+\paragraph{} \plonk{} has a faster prover runtime compared to Sonic, a fully succinct zk-SNARK for circuit sat, due to Maller et al. \cite{sonic}. The rest of the notes will explain \plonk{} and its improvements.
+
+\section{Polynomial protocols for identifying permutations}
+\paragraph{} This is section 5 of \cite{plonk}.
+
+\subsection{Checking permutations of univariate polynomials}
+
+\paragraph{} Let $n, d$ be two integer parameters, with $n \leq d$. Think of $n$ as the degree of the honest prover's polynomials, and $d$ as a bound the verifier enforces on adversarial provers. Also assume we have a prime field $\mathbb{F}$ and $H \subset \mathbb{F}$ is a multiplicative subgroup of order $n$ with generator $\gen{}$.
+
+\paragraph{} For $i = 1, \ldots, n$, let $L_i(X) \in \mathbb{F}_{<n}[X]$ such that $L_i(\gen{}^i) = 1$ and $L_i(a) = 0$ for $a \in H$, $a \neq \gen{}^i$. $\{ L_i \}_{i \in [n]}$ is called the Lagrange basis for $H$. One useful fact about the Lagrange basis is that it can "reduce point checks to range checks." What does this mean?
+
+\begin{fact}
+    Fix $i \in [n]$, and $Z, Z^* \in \mathbb{F}[X]$. Then $L_i(a)(Z(a) - Z^*(a)) = 0$ for each $a \in H$ if and only if $Z(\gen^i) = Z^*(\gen^i)$.
+\end{fact}
+\begin{proof}
+    \begin{enumerate}
+        \item Suppose $Z(\gen^i) = Z^*(\gen^i)$. If $a = \gen^i$ then $L_i(a)(Z(a) - Z^*(a))$ becomes $1 \cdot 0 = 0$. If $a \neq \gen^i$ then $L_i(a) = 0$.
+        \item Suppose for all $a \in H$ that $L_i(a) (Z(a) - Z^*(a)) = 0$. Then 
+        \[L_i(\gen^i) (Z(\gen^i) - Z^*(\gen^i)) = Z(\gen^i) - Z^*(\gen^i) = 0.\]
+    \end{enumerate}
+\end{proof}
+
+\paragraph{} So to check if two polynomials $Z,Z^*$ are equal at $\gen^i$, it is enough to check that the range of $L_i(X)(Z(X) - Z^*(X))$ is 0 on $H$.
+
+\paragraph{} For $f, g \in \mathbb{F}_{<d}[X]$ and a permutation $\sigma: [n] \rightarrow [n]$, we say $g = \sigma(f)$ if for all $i \in [n]$, $g(\gen^i) = f(\gen^{\sigma(i)})$. That is, $f$ simply permutes the list $\langle g(\gen^1), g(\gen^2), \ldots, g(\gen^n) \rangle$.
+
+\paragraph{} Here is a "ranged polynomial" protocol for a polytime prover $P_{\text{poly}}$ to prove that $g = \sigma(f)$.
+
+\paragraph{Preprocessed polynomials} Computed before the protocol is executed:
+\begin{itemize}
+    \item $S_{\text{ID}} \in \field_{<n}[X]$ defined by $S_{\text{ID}}(\gen^i) = i$ $\forall i \in [n]$.
+    \item $S_\sigma \in \field{<n}[X]$ defined by $S_{\sigma}(\gen^i) = \sigma(i)$ $\forall i \in [n]$.
+\end{itemize}
+
+\paragraph{Inputs} $f, g \in \field_{<n}[X]$.
+
+\paragraph{Protocol}
+\begin{enumerate}
+    \item $V_{\text{poly}}$ chooses two random field elements $\beta, \gamma$ and sends them to $P_\text{poly}$.
+    
+    \item Let
+    \begin{align*}
+        &f' := f + \beta \cdot S_\text{ID} + \gamma, \\
+        &g' := g + \beta \cdot S_\sigma + \gamma.
+    \end{align*}
+    So for all $i \in [n]$,
+    \begin{align*}
+        &f'(\gen^i) = f(\gen^i) + \beta \cdot i + \gamma, \\
+        &g'(\gen^i) = g(\gen^i) + \beta \cdot \sigma(i) + \gamma. \\
+    \end{align*}
+
+    \item $P_\text{poly}$ computes $Z \in \field_{<n}[X]$ such that $Z(\gen{}) = 1$ and for $i \in \{2, \ldots, n\}$,
+    \[ Z(\gen^i) = \prod_{1 \leq j < i} f'(\gen^j) / g'(\gen^j) \]
+    (if one of $Z(\gen^i)$ is undefined, the protocol is aborted. This happens with negligible probability).
+
+    \item $P_\text{poly}$ sends $Z$ to $V_\text{poly}$.
+    \item $V_\text{poly}$ checks if for all $a \in H$ that
+    \begin{itemize}
+        \item[(a)] $L_1(a)(Z(a) - 1) = 0$,
+        \item[(b)] $Z(a)f'(a) = g'(a)Z(a \cdot \gen{})$
+    \end{itemize}
+    and accepts if all checks hold.
+\end{enumerate}
+
+\paragraph{Correctness} If $g = \sigma(f)$ for some permutation $\sigma$, then we just have to show that both checks (a) and (b) pass with $P_\text{poly}$ is honest. 
+
+\paragraph{} (a) holds if and only if $Z(\gen) = 1$, which is the case under an honest prover. 
+
+\paragraph{} As for (b), observe that as we defined $Z$:
+\[ Z(\gen^{i + 1}) = Z(\gen^i) \cdot \frac{f'(\gen^i)}{g'(\gen^i)}. \]
+Rearrange the terms and we are done.
+
+\paragraph{Soundness} This relies on the Shwartz-Zippel lemma, exemplified in the following lemma (Claim A.1 in the paper:
+
+\begin{lemma}
+    Fix a permutation $\sigma: [n] \rightarrow [n]$, and say $a_1, \ldots, a_n, b_1, \ldots, b_n \in \field{}$. If for uniformly random chosen $\beta, \gamma \in \field{}$ we have
+    \[ \prod_{i \in [n]} (a_i + \beta \cdot i + \gamma) = \prod_{i \in [n]} (b_i + \beta \cdot \sigma(i) + \gamma) \]
+    with probability $> n / |\field{}|$, then for all $i \in [n]$ $b_i = a_{\sigma(i)}$ (i.e. the polynomials on both sides are equal).
+\end{lemma}
+
+\paragraph{} Now suppose that $g \neq \sigma(f)$. By Lemma 2, except with negligible probability over choice of $\beta, \gamma$, we have
+\[ a := \prod_{i \in [n]} f'(\gen^i) \neq b := \prod_{i \in [n]} g'(\gen^i). \]
+Assume indeed that $a \neq b$ and that $g'(\gen^i) \neq 0$ ever. We show that if both checks pass then we have a contradiction.
+
+\paragraph{} We know $Z(\gen) = 1$ from (a). We also know from (b) that 
+\[ Z(\gen^{i + 1}) = \prod_{i \leq j < i} \frac{f'(\gen^j)}{g'(\gen^j)}. \]
+Then $Z(\gen^{n + 1}) = a / b \neq 1$. But $\gen^{n + 1} = \gen{}$ and so we have a contradiction.
+
+\subsection{"Extended" permutations and copy-satisfy}
+There is a way to extend the meaning of $g = \sigma(f)$ for many polynomials $f_1, \ldots$ and $g_1, \ldots$, then check for this property. I will define this, but not go through the protocol for "extended" permutations. All I will say is that it is very similar to the case of single polynomials, as above.
+
+\paragraph{} Say we have $f_1, \ldots, f_k, g_1, \ldots, g_k \in \field_{<d}[X]$. For each position in $[kn]$ we are going to define a value corresponding to $f$ and one corresponding to $g$. Specifically, for $j \in [k]$ (block) and $i \in [n]$ (position within block $j$), we define
+\begin{align*}
+    &f_{((j - 1) \cdot n + 1)} = f_j (\gen^i), \\
+    &g_{((j - 1) \cdot n + 1)} = g_j (\gen^i).
+\end{align*}
+This is just saying that we are evaluating all polynomials over all $\gen^i$. Let $\sigma: [kn] \rightarrow [kn]$ be a permutation over the $kn$ positions. We write that
+\[ (g_1, \ldots, g_k) = \sigma(f_1, \ldots, f_k) \]
+if
+\[ \forall \ell \in [kn], \; g_{(\ell)} = f_{(\sigma(\ell))}. \]
+As said before, there is a similar interactive protocol for testing for this property.
+
+\paragraph{Crypto primitive of importance}
+Let $\mathcal{T} = \{T_1, \ldots, T_s\}$ be a partition of $[kn]$ into disjoint blocks. For $f_1, \ldots, f_k \in \field_{<n}[X]$, we say that $(f_1, \ldots, f_k)$ \textit{copy-satisfy} $\mathcal{T}$ if $f_{(\ell)} = f_{(\ell')}$ whenever $\ell, \ell'$ are in the same block of $\mathcal{T}$.
+
+\paragraph{} We can use our test for extended permutations to test if $(f_1, \ldots, f_k)$ copy-satisfy $\mathcal{T}$ in the following way: define a permutation $\pi$ on $[kn]$ such that for each block $T_i$, $\sigma$ contains a cycle going over all elements of $T_i$. Then $(f_1, \ldots, f_k)$ copy-satisfy $\mathcal{T}$ if and only if $(f_1, \ldots, f_k) = \sigma(f_1, \ldots, f_k)$.
+
+\paragraph{} We will come back to this tool when we put \plonk{} all together.
+
+\section{Constraint systems}
+\paragraph{} This is section 6 of \cite{plonk}.
+
+\paragraph{} Constraint systems are as they sound: a means to model the contraints of some system. In this case, constraint systems capture arithmetic circuits with fan-in two and unlimited fan-out, $n$ gates and $m$ wires. But they are more general. All zk-SNARKS need a computational problem which they solve, and a way of encoding statements we would like to prove. Constraint systems are one such way.
+
+\paragraph{} Since I do not know how to use tikz... I will suggest a reference to see how constraint systems simulate arithmetic circuits. Vitalik Buterin has a great diagram and explanation, link \href{https://vitalik.ca/general/2019/09/22/plonk.html}{here}. Constraint systems are also a satisfaction problem.
+
+\paragraph{} Fix positive integers $m$ and $n$. A constraint system $\mathscr{C} = (\mathcal{V}, \mathcal{Q})$ is defined as folows:
+
+\begin{itemize}
+    \item $\mathcal{V} = (\mathbf{a}, \mathbf{b}, \mathbf{c})$, where $\mathbf{a}, \mathbf{b}, \mathbf{c} \in [m]^n$. This specifies, for each gate $i \in [n]$, what are the "left," "right," and "output" wires.
+    \item $\mathcal{Q} = (\mathbf{q_L}, \mathbf{q_R}, \mathbf{q_O}, \mathbf{q_M}, \mathbf{q_C}) \in (\field^n)^5$. These select whether gates are addition or multiplication gates.
+\end{itemize}
+
+\paragraph{} $\bf x \in \field^m$ \textit{satisfies} $\mathscr{C}$ if for each $i \in [n]$,
+\[ (\mathbf{q_L})_i \cdot \mathbf{x_{a_i}} + (\mathbf{q_R})_i \cdot \mathbf{x_{b_i}} + (\mathbf{q_O})_i \cdot \mathbf{x_{c_i}} + (\mathbf{q_M})_i \cdot (\mathbf{x_{a_i}} \mathbf{x_{b_i}}) + (\mathbf{q_C})_i = 0. \]
+
+\paragraph{} To define a relation on $\mathscr{C}$, we let $\ell \leq m$ be some positive integer, and consider $\mathcal{I} = \{1, \ldots, \ell\}$ the set of "public inputs." Then the relation $\mathcal{R}_\mathscr{C}$ is the set of pairs $(x, \omega)$ with $x \in \field^\ell$ and $\omega \in \field^{m - \ell}$ such that $(x, \omega)$ satisfies $\mathscr{C}$.
+
+\paragraph{Arithmetic Circuits} The paper has a reduction from arithmetic circuits to constraint systems in section 6. It is worth checking that it works. We can also enforce that our witness must take 0/1 values, by altering constraints.
+
+\section{Idealized low-degree protocols}
+\paragraph{} This is section 4 of \cite{plonk}. I have already taken notes on the KZG protocol.
+
+\paragraph{} We specify a generalization of a polynomial commitment scheme like KZG. This is a protocol between prover, verifier, and a trusted party $\mathcal{I}$, which acheives the following. The prover sends low-degree polynomials to $\mathcal{I}$. Then, the verifier may ask $\mathcal{I}$ whether certain identities hold between those polynomials, and additional predefined polynomials known to the verifier.
+
+\paragraph{} Let $d, D, t, \ell$ be positive integers. Consider the following protocol, called a $(d, D, t, \ell)$-polynomial protocol.
+\begin{enumerate}
+    \item The protocol already has baked in preprocessed polynomials $g_1, \ldots, g_\ell \in \field_{<d}[X]$.
+    \item $P_\text{poly}$ sends messages to $\mathcal{I}$ of the form $f$ for $f \in \field_{<d}[X]$. If the messages are not of this form, we abort.
+    \item We are in the public coin model, so $V_\text{poly}$'s messages to $P_\text{poly}$ are random coins.
+    \item At the end of the protocol, suppose $f_1, \ldots, f_t$ are the polynomials sent from $P_\text{poly}$ to $\mathcal{I}$. $V_\text{poly}$ asks $\mathcal{I}$ if polynomial identites hold between $\{f_1, \ldots, f_t, g_1, \ldots, g_\ell\}$, where each identity is of the form
+    \[ F(X) := G(X, h_1(v_1(X)), \ldots, h_M(v_M(X))) \equiv 0, \]
+    for some $h_i \in \{f_1, \ldots, f_t, g_1, \ldots, g_\ell\}$, $G \in \field[X, X_1, \ldots, X_M]$, $v_1, \ldots, v_M \in \field_{<d}[X]$ such that $F \in \field_{<D}[X]$ for every choice of $f_1, \ldots, f_t$ made by $P_\text{poly}$ when following the protocol honestly.
+
+    \item After receiving answers from $\mathcal{I}$, $V_\text{poly}$ accepts if all identities hold, otherwise rejects.
+\end{enumerate}
+
+\begin{definition}
+    Given a relation $\mathcal{R}$, a polynomial protocol for $\mathcal{R}$ is a polynomial protocol with the following additional properties:
+    \begin{enumerate}
+        \item $P_\text{poly}$ and $V_\text{poly}$ are both given $x$. If there is an $\omega$ where $(x, \omega) \in \mathcal{R}$, then we assume $P_\text{poly}$ has possession of $\omega$.
+        \item Completeness: If $P_\text{poly}$ follows the protocol correctly using a witness $\omega$ for $x$, $V_\text{poly}$ accepts w.p. 1.
+        \item Knowledge Soundness: There exists an efficient algorithm $E$, that given access to the messages of $P_\text{poly}$ and $\mathcal{I}$ outputs $\omega$ such that, for any strategy of $P_\text{poly}$, the probability that both:
+        \begin{itemize}
+            \item[(a)] $V_\text{poly}$ accepts, and
+            \item[(b)] $(x, \omega) \notin \mathcal{R}$
+        \end{itemize}
+        is negligible.
+    \end{enumerate}
+\end{definition}
+
+\subsection{Polynomial protocols on ranges}
+\paragraph{} There is a distinction we can make where $V_\text{poly}$ only needs to check if the polynomial equations hold on a certain range of input values. We call this an $S$-ranged $(d, D, t, \ell)$-polynomial protocol. In fact, we already wrote an $H$-ranged protocol for testing if $(g_1, \ldots, g_k) = \sigma(f_1, \ldots, f_k)$.
+
+\begin{lemma}
+    Let $\mathscr{P}$ be an $S$-ranged $(d, D, t, \ell)$-polynomial protocol for $\mathcal{R}$. Then we can construct a $(\max \{ d, |S|, D - |S| \}, D, t + 1, \ell + 1)$-polynomial protocol $\mathscr{P}^*$ for $\mathcal{R}$.
+\end{lemma}
+
+\paragraph{} This says that we can convert a ranged protocol to a polynomial protocol, and only incur one additional prover polynomial! We are also using a particular SRS string here.
+
+\paragraph{} The culmination of section 4 the last lemma, which states that if we have a public coin polynomial protocol for a relation $\mathcal{R}$, then we can construct a protocol for $\mathcal{R}$ with knowledge soundness in the Algebraic Group Model, under a $2d$-DLOG assumption. I won't write the proof, but I will expand on what this means.
+\begin{itemize}
+    \item The SRS here is a string of monomials over the field $\field{}$ with coefficients in two groups of the same order, evaluated at a randomly chosen point $x \in \field{}$. The $Q$-DLOG assumption for groups $(\mathbb{G}_1, \mathbb{G}_2)$ states that given an SRS string as above, where $x \in \field{}$ is random, the probability of an efficient $\mathcal{A}$ outputting $x$ is negligible. So no efficient prover can recover the secret parameter used to create the SRS, in order to fool verifiers.
+    
+    \item The Algebraic Group Model (AGM) was introduced in \cite{agm}. It models adversaries which can output field elements to participate in the protocol, but they must also output coefficients of the SRS used to represent that field element. This is harder to be secure in than the Generic Group Model (GGM), which prior SNARK constructions base their security in.
+\end{itemize}
+
+\section{The main protocol}
+\paragraph{} This is section 7 of \cite{plonk}.
+
+\paragraph{} Let $\mathscr{C} = (\mathcal{V}, \mathcal{Q})$ be a constraint system. Here is a protocol for the relation $\mathcal{R}_\mathscr{C}$. First, we define a partition of $\mathscr{C}$.
+
+\paragraph{} Suppose $\mathcal{V} = (\bf a, \bf b, \bf c)$. Think of $\mathcal{V}$ as a vector in $[m]^{3n}$. For $i \in [m]$, let $T_i \subset [3n]$ be the set of indices $j \in [3n]$ such that $V_j = i$. Now define
+\[ \mathcal{T}_\mathscr{C} := \{ T_i \}_{i \in [m]}. \]
+Here is an $H$-ranged polynomial protocol for $\mathcal{R}_\mathscr{C}$.
+
+\paragraph{Protocol}
+\begin{enumerate}
+    \item Let $x \in \field^m$ be $P_\text{poly}$'s input. $P_\text{poly}$ computes three polynomials $f_L, f_R, f_O \in \field_{<n}[X]$, where for $i \in [n]$
+    \[ f_L(\gen^i) = \mathbf{x_{a_i}}, f_R(\gen^i) = \mathbf{x_{b_i}}, f_O(\gen^i) = \mathbf{x_{c_i}}. \]
+    $P_\text{poly}$ sends $f_L, f_R, F_O$ to $\mathcal{I}$.
+
+    \item $P_\text{poly}$ and $V_\text{poly}$ run the extended permutation check protocol using the permutation between $(f_L, f_R, f_O)$ and itself. As we saw, thick checks if $(f_L, f_R, f_O)$ copy-satisfies $\mathcal{T}_{\mathscr{C}}$.
+    
+    \item $V_\text{poly}$ computes the "Public input polynomial"
+    \[ \text{PI}(X) := \sum_{i \in [\ell]} -x_i \cdot L_i(x). \]
+
+    \item $V_\text{poly}$ now checks the identity
+    \[ \mathbf{q_L} \cdot f_L + \mathbf{q_R} \cdot f_R + \mathbf{q_O} \cdot L_O + \mathbf{q_M} \cdot f_L \cdot f_R + (\mathbf{q_C} + \text{PI}) = 0, \]
+    on $H$.
+\end{enumerate}
+
+\begin{theorem}
+    The protocol is an $H$-ranged polynomial protocol for the relation $\mathcal{R}_\mathscr{C}$.
+\end{theorem}
+\begin{proof}
+    If $(f_L, f_R, f_O)$ copy satisfies $\sigma(\mathscr{C})$ and the identity checked by $V_\text{poly}$ holds, then $(x, \omega) \in \mathcal{R}_\mathscr{C}$.
+
+    \paragraph{} Knowledge soundness follows from describing an extractor $E$. $E$ uses the values of $f_L, f_R, f_O$ to constuct an assignment naturally: if $\mathbf{a}_i = j$, let $\mathbf{x}_j = f_L(\gen^i)$. $E$ then outputs the last $m - \ell$ elements for a witness $\omega$.
+
+    \paragraph{} Look at the event where $(x, \omega) \notin \mathcal{R}$ but $V_\text{poly}$ still accepts. This event has two subevents: one where $(f_L, f_R, f_O)$ doesn't copy-satisfy $\sigma(\mathscr{C})$ and the one where it does. The first event has negligible probability. The second case where the triple does copy-satisfy $\sigma(\mathscr{C})$ and last identity holds. In fact, it must be the case that $(x, \omega) \in \mathcal{R}$. So the whole event has negligible probability.
+\end{proof}
+
+The paper already showed that a $S$-ranged polynomial protocol for the relation yields a protocol for the relation with Knowledge Soundness in the AGM. Applying that for $\mathcal{R}_\mathscr{P}$, we get \plonk{}. Moreover, they compute that the prover requires $11n + 1$ group operations, and the total prover communication consists of 7 group elements and 7 field elements.
+
+\section{Some Comments in the Paper}
+\begin{itemize}
+    \item We did not talk about zero knowledge yet. They claim that all that has to be done to add zero knowledge is random multiples of $Z_H$ to the prover polynomials, and requiring the verifier to send challenges in $\field{} \setminus H$.
+    \item $H$ is the multiplicative subgroup containing the $n$'th roots of unity in $\field{}$.
+    \item The last thing that needs to be done is to tranform \plonk{} into a non-interactive proof, by applying Fiat-Shamir.
+\end{itemize}
+
+\bibliographystyle{alpha}
+\bibliography{lindenbaum}
+
+\end{document}
