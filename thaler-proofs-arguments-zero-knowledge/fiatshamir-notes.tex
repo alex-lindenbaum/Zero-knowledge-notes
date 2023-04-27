@@ -1,0 +1,53 @@
+\documentclass[11pt]{article}
+
+\usepackage{lindenbaum}
+
+\newcommand{\verifier}{$\mathcal{V}$ }
+\newcommand{\prover}{$\mathcal{P}$ }
+
+\title{The Random Oracle Model and Fiat-Shamir}
+\author{Alexander Lindenbaum}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\paragraph*{} Notes are from Chapter 5 of \cite{tha22}.
+
+\begin{definition}[Public-coin interactive proof] 
+    An interactive proof where any coin tossed by \verifier is visible to \prover as soon as it is tossed. Without loss of generality, these random coin flips are the only messages \verifier sends to \prover (all other messages are deterministic and based on $x$ and $r$, so \prover can derive them on its own). These are "random challanges."
+\end{definition}
+
+\section{The Random Oracle Model}
+\begin{definition}[Random Oracle Model]
+    The random oracle model (ROM) is the assumption that in an interactive proof, the prover and verifier have query access to a random function/oracle $R: \mathcal{D} \rightarrow \{0, 1\}^\lambda$. On input query $x \in \mathcal{D}$, $R$ makes  an independent random choice to determine $R(x)$. $R$ keeps a record to make sure that it repeats the same response if $x$ is queried again.
+\end{definition}
+
+\paragraph*{Some remarks}
+\begin{itemize}
+    \item An idealized setting, motivated by practical constructions of hash functions like SHA-3, computationally indistinguishable from (truly) random functions.
+    \item Not valid in real world, since $|\mathcal{D}| \geq 2^{256}$ to ensure security. Instead, imagine it as a hash of $x$.
+    \item Protocols proven secure in ROM tend to be considered secure in practice.
+\end{itemize}
+
+\section{The Fiat-Shamir Transformation}
+\paragraph*{} Purpose: to take any public-coin IP/argument and transform it into a non-interactive, publicly verifiable protocol $\mathcal{Q}$ in ROM.
+
+\begin{definition}[Fiat-Shamir Transformation]
+    \prover takes the verifier's message in round $i$ of $\mathcal{I}$ to be a query to the random oracle. The query point is the list of messages sent by \prover in rounds $1, \ldots, i$. \verifier uses the prover's messages as in $\mathcal{I}$, and checks that the messages from \prover are hashes of previous messages.
+\end{definition}
+
+\paragraph{Some remarks}
+\begin{itemize}
+    \item \prover can use \textit{hash chaining}, i.e. the prover's next message is only the hash of the previous message.
+    \item $x$ should also always be hashed into the messages. This gives security under adversaries that can choose $x$.
+    \item When Fiat-Shamir is applied to a \textit{constant-round} public-coin IP with negligble soundness error, $\mathcal{Q}$ in ROM is sound against poly time provers.
+    \item If $\mathcal{I}$ has \textit{round-by-round} soundness then $\mathcal{Q}$ is sound in ROM.
+\end{itemize}
+
+\bibliographystyle{alpha}
+\bibliography{lindenbaum}
+
+\end{document}

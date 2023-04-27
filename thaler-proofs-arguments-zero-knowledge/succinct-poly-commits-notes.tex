@@ -1,0 +1,84 @@
+\documentclass[11pt]{article}
+
+\usepackage{lindenbaum}
+
+\newcommand{\prover}{$\mathcal{P}$ }
+\newcommand{\verifier}{$\mathcal{V}$ }
+
+\title{Succinct Arguments for Circuit Sat, Merkle Trees and Polynomial Commitment Schemes}
+\author{Alexander Lindenbaum}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\paragraph*{} Notes are from Chapter 7 of \cite{tha22}.
+
+\section{Arithmetic Circuit Satisfiability}
+
+\paragraph{} In the arithmetic circuit satisfiability problem, you have a fixed circuit $\mathcal{C}(x, w)$. with inputs in $\mathbb{F}^n$. Given $x$ and an output(s) $y$, the problem is to find $w$ so that $\mathcal{C}(x, w) = y$. We care about this problem because arithmetic circuits encode time-bounded computation. The problem of, whether a TM $M$ on input $x$ outputs $y$ in time $\leq T$ can be reduced the arithmetic circuit satisfiability, where $\text{size}(\mathcal{C}) \approx T$ and $\text{depth}(\mathcal{C}) \approx O(\log T)$. Arithmetic circuits also encode commonly used circuits like SHA-256, which we would want to prove we have a $w$ such that $\text{SHA-256}(w) = y$.
+
+\paragraph{} \cite{gkr08} gives an IP for evaluating a circuit $\mathcal{C}$ on an input. In GKR, the prover runs in time polynomial in the size of $\mathcal{C}$, and the verifier runs in $\text{polylog}(n + \text{depth}(\mathcal{C}) \log (\text{size} (\mathcal{C}))$.
+
+\paragraph{A naive IP for circuit satisfiability:} \prover sends $w$ such that $\mathcal{C}(x, w) = y$. Then $\mathcal{P}$ and $\mathcal{v}$ simulate GKR on $(x, w)$.
+
+\paragraph{} But this is not a "succinct" IP, because \prover has to send a proof of size $|w|$. We are shooting for total communication which is sublinear in $|w|$. Without going into too much detail for GKR, the way to get a shorter proof is to have \prover commit to a low-degree polynomial $\tilde{w}(x)$, and \verifier only needs to ask for its evaluation on a single field element.
+
+\section{Polynomial Commitment Schemes}
+
+\subsection{(String) Commitment Schemes} A sender has a message $m \in \Sigma^n$ which they want to commit to. Sender uses randomness to generate and send a commitment string $\text{com}_m$ to receiver. When the receiver wants to "open" the commitment, they ask for the random bits and run a verification algorithm on $\text{com}_m$, $m$ and the random bits. A proper commitmnent scheme holds two properties:
+\begin{enumerate}
+    \item Hiding: $(t, \varepsilon)$-hiding: for all messages $m$ and $m'$ of the same size, the distributions $\text{com}(m, r)$ and $\text{com}(m', r)$ are $(t, \varepsilon)$-indistinguishable, where the distributions are over the random bits $r$.
+    \item Binding: (this is "perfect binding") for all messages $m$ and random bits $r, r'$, 
+    \[\text{ver}(\text{com}(m, r), r')\]
+    is either $m$ itself or "FAIL".
+\end{enumerate}
+
+\paragraph{} One way to obtain a commitment scheme is by using a collision-resistant hash function (CRHF) $H: \mathcal{M} \times \mathcal{R} \rightarrow \mathcal{C}$. We would have:
+\begin{align*}
+    \text{com}(m, r) &= H(m, r), \\
+    \text{ver}(m, \text{com}, r)  &= 1 \Longleftrightarrow \text{com} = H(m, r).
+\end{align*}
+(The form of the verification function is slightly different here from above. These forms are all equivalent.)
+
+\subsection{Functional Commitment Schemes} Fix a function family $\mathcal{F} = \{f: \mathcal{X} \rightarrow \mathcal{Y}\}$. For example, $\mathcal{F}$ could be $\mathbb{F}_p^{(\leq d)} [X]$, the set of all univariate polynomials of degree $\leq d$, over a prime field. Or $\mathcal{C}_s$, the set of all arithmetic circuits of size $\leq s$. The idea is now the sender "commits to a function" $f \in \mathcal{F}$. The reciever can query the sender on a particular input $x \in \mathcal{X}$, and can verify that the response $y$ is indeed the output of $f$ on input $x$.
+
+\paragraph{} \cite{kzg10} gives a formal definition of a polynomial commitment scheme, and provides constructions based on the discrete log, and elliptic curves and pairings. I will only go over the definition informally.
+
+\begin{definition}
+    A \textit{polynomial commitment scheme} is six algorithms: Setup, Commit, Open, VerifyPoly, CreateWitness, and VerifyEval:
+    \begin{itemize}
+        \item Setup($1^\lambda, t$) generates an appropriate algebraic structure $\mathcal{G}$ and a public key-private key pair (pk, sk) to commit to a polynomial of degree $\leq d$.
+        \item Commit(pk, $\phi(x)$) belongs to \prover. Commit outputs a commitment $\mathcal{C}$ to a polynomial $\phi(x)$ for public key pk, and also outputs decommitment information $d$.
+        \item Open(pk, $\mathcal{C}$, $\phi(x)$, $d$) belongs to \prover. At request of \verifier, opens the commitment to $\phi(x)$ by simply sending $\phi(x)$ (in case we study the adversarial situation, Open reveals some other polynomial).
+        \item VerifyPoly(pk, $\mathcal{C}$, $\phi(x)$, $d$) belongs to \verifier. Verifies that $\mathcal{C}$ is indeed a commitment to $\phi(x)$.
+        \item CreateWitness(pk, $\phi(x)$, $i$, $d$) belongs to \prover. Outputs $\langle i, \phi(i), w_i \rangle$, where $w_i$ is a witness for the evaluation of $\phi(i)$.
+        \item VerifyEval(pk, $\mathcal{C}$, $i$, $\phi(i)$, $w_i$) belongs to \verifier. Verifies that $\phi(i)$ is indeed the evaluation of $i$ on the polynomial commited to by $\mathcal{C}$.
+    \end{itemize}
+\end{definition}
+
+\subsection{An impractical polynomial commitment scheme} Given in \cite{tha22}. It is "impractical" because the prover has large runtime, but still worth studying. Uses Merkle Trees and a low-degree test, which we will cover.
+
+\paragraph{Merkle Trees \cite{merkle79}} Merkle Trees (or hash trees) are immediately used for string commitment schemes. The idea is to construct a perfect binary tree bottom-up. Say \prover wants to commit to a string $s \in \Sigma^n$:
+\begin{itemize}
+    \item Leaves of the tree: symbols $s_i$ in $s$.
+    \item Internal nodes: the hash of its two children.
+    \item The final commitment string: the root of the tree.
+\end{itemize}
+\paragraph{} Suppose \prover is asked to reveal $s_i$. \prover would send the value of $s_i$, every node along the root-to-leaf path for $s_i$, and all nodes which are siblings to nodes along that path. That way, \verifier can verify the commited string by hashing themselves the correct pairs to go from $s_i$ to the root. The depth of the tree is $O(\log n)$, meaning that the sender sends $O(\log n)$ hash values for each symbol revealed.
+
+\paragraph{} So how do we get a polynomial commitment scheme from a Merkle Tree? If \prover commits to a polynomial $p$, they commit to the string which prints all evaluations of $p$, $p(\ell_1), \cdots, p(\ell_N)$, where $\ell_1, \ldots, \ell_N$ form the domain of $p$. When \verifier asks for $p(\ell_i)$, \prover the root-to-leaf path for $p(\ell_i)$ and all sibling nodes.
+
+\paragraph{} But this is not a correct polynomial commitment scheme, because \prover could simply commit to a polynomial which does not have degree $\leq d$, or any arbitrary function. The only guarantee that \verifier will have is that \prover is commiting to the function they originally chose. For this, \verifier needs to test that the function is of low-degree
+
+\paragraph{Low-degree tests} In this model, either the receiver has black-box query access to a function, or they are reading off a string $s$ of concatenated evaluations. The function is $m$-variate, inputs over field $\mathbb{F}$. There are $|\mathbb{F}|^m$ possible inputs, so $s$ contains a list of $|\mathbb{F}|^m$ elements of $\mathbb{F}$.
+
+\paragraph{} The problem: is $s$ consistent with a polynomial of degree $\leq d$? We want to answer this problem without looking at too many bits in $s$. \cite{tha22} confirms that we have strong randomized tests for this. The procedures tend to be simple, but analyses are tricky (I suspect one of these methods could use Shwartz-Zippel Lemma).
+
+\paragraph{} Thus, we have a protocol for commiting to a low-degree polynomial: \prover merkle-hashes evaluations of $p$, and when \verifier asks to reveal evaluations of $p$, they run a low-degree polynomial test.
+
+\bibliographystyle{alpha}
+\bibliography{lindenbaum}
+
+\end{document}
